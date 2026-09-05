@@ -1,0 +1,19 @@
+{
+  "name": "confy",
+  "version": "0.6.1",
+  "description": "Zero-boilerplate configuration management — JavaScript port of the Rust crate",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["config", "configuration", "toml", "xdg"],
+  "license": "MIT",
+  "files": ["src", "README.md"],
+  "dependencies": {}
+}

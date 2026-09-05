@@ -3,53 +3,16 @@ on: [push, pull_request]
 name: CI
 
 jobs:
-  check:
-    name: Check
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        rust:
-          - stable
-          - beta
-          - nightly
-        os:
-          - ubuntu-latest
-          - macOS-latest
-          - windows-latest
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install Rust 
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-
-      - name: Setup Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.rust }}
-
-      - name: Run cargo check
-        run: cargo check
-        shell: bash
-
   test:
-    needs: [check]
     name: Test Suite
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        rust:
-          - stable
-          - beta
-          - nightly
+        node-version:
+          - "18"
+          - "20"
+          - "22"
+          - "24"
         os:
           - ubuntu-latest
           - macOS-latest
@@ -58,57 +21,11 @@ jobs:
       - name: Checkout sources
         uses: actions/checkout@v4
 
-      - name: Install Rust 
-        uses: dtolnay/rust-toolchain@master
+      - name: Install Node
+        uses: actions/setup-node@v4
         with:
-          toolchain: ${{ matrix.rust }}
+          node-version: ${{ matrix.node-version }}
 
-      - name: Setup Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.rust }}
-
-      - name: Run cargo test
-        run: cargo test -- --test-threads=1
-        shell: bash
-
-  clippy:
-    needs: [check]
-    name: Clippy
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        rust:
-          - stable
-          - beta
-          - nightly
-    steps:
-      - name: Checkout sources
-        uses: actions/checkout@v4
-
-      - name: Install Rust 
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: ${{ matrix.rust }}
-          components: clippy
-
-      - name: Setup Cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.rust }}
-
-      - name: Run cargo clippy
-        run: cargo clippy -- -D warnings
+      - name: Run tests
+        run: npm test
         shell: bash
