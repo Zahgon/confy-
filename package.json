@@ -1,0 +1,25 @@
+{
+  "name": "confy",
+  "version": "2.0.0",
+  "description": "Boilerplate-free configuration management",
+  "license": "MIT OR X11 OR Apache-2.0",
+  "author": "Katharina Fey <kookie@spacekookie.de>",
+  "repository": "https://github.com/rust-cli/confy",
+  "homepage": "https://github.com/rust-cli/confy#readme",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js",
+    "./basic-toml": "./src/basic-toml.js",
+    "./yaml": "./src/yaml.js",
+    "./ron": "./src/ron.js"
+  },
+  "files": ["src"],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test --test-concurrency=1 \"test/**/*.test.js\"",
+    "lint": "node --expose-internals scripts/lint.js",
+    "example": "node examples/simple.js"
+  }
+}

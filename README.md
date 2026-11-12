@@ -1,112 +1,134 @@
 # confy
 
-[![crates.io](https://img.shields.io/crates/v/confy)](https://crates.io/crates/confy)
-[![docs.rs](https://img.shields.io/docsrs/confy)](https://docs.rs/confy/)
 [![Discord](https://img.shields.io/badge/chat-Discord-informational)](https://discord.gg/dwq4Zme)
 
-Zero-boilerplate configuration management.
+Zero-boilerplate configuration management for Node.js.
 
 Focus on storing the right data, instead of worrying about how or where to store it.
 
-```rust
-use serde_derive::{Serialize, Deserialize};
+```js
+import * as confy from 'confy'
 
-#[derive(Default, Debug, Serialize, Deserialize)]
-struct MyConfig {
-    version: u8,
-    api_key: String,
-}
+const { t } = confy
+const MyConfig = t.struct('MyConfig', { version: t.u8(), apiKey: t.string() })
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let cfg: MyConfig = confy::load("my-app-name", None)?;
-    dbg!(cfg);
-    Ok(())
-}
+const cfg = confy.load('my-app-name', null, MyConfig)
+console.log(cfg)
 ```
 
-## Confy's feature flags
+This package is the JavaScript port of the Rust crate `confy` 2.0.0. Files written by one can be read by the other.
 
-`confy` can be used with either `TOML`, `YAML`, or `RON` files.
-`TOML` is the default language used with `confy` but any of the other languages can be used by enabling them with feature flags as shown below.
+## Schemas
 
-Note: you can only use __one__ of these features at a time, so in order to use either of the optional features you have to disable default features.
+Every load and store call takes a schema built with `t`. It plays the part of the Rust type: field order, numeric
+widths, optional fields and the default value written when no file exists yet.
 
-### Using YAML
+| Builder | Rust type | JavaScript value | Default |
+| --- | --- | --- | --- |
+| `t.bool()` | `bool` | boolean | `false` |
+| `t.string()` | `String` | string | `''` |
+| `t.i8()` ... `t.i64()`, `t.isize()`, `t.u8()` ... `t.u64()`, `t.usize()` | integers | Number, or BigInt outside the safe range | `0` |
+| `t.f32()`, `t.f64()` | floats | Number (an `f32` is rounded to the nearest `f32`) | `0` |
+| `t.option(s)` | `Option<_>` | `null` for `None` | `null` |
+| `t.vec(s)` | `Vec<_>` | array | `[]` |
+| `t.map(s)` | `BTreeMap<String, _>` | plain object, keys written in UTF-8 byte order | `{}` |
+| `t.struct(name, { field: s, ... })` | a struct | plain object, fields in that order | each field's default |
 
-To use `YAML` files with `confy` you have to make sure you have enabled the `yaml_conf` feature and disabled both `toml_conf` and `ron_conf`.
+A missing field, a wrong type or an integer out of range in a file is an error, like serde. Unknown keys are ignored.
 
-Enable the feature in `Cargo.toml`:
+## Formats
 
-```toml
-[dependencies.confy]
-features = ["yaml_conf"]
-default-features = false
-```
+`confy` can be used with `TOML`, `YAML` or `RON` files. Each format is its own entry point with the same API, in
+place of the Rust crate's feature flags; use one per application.
 
-### Using RON
+| Import | Format | File extension |
+| --- | --- | --- |
+| `confy` | TOML, written like the Rust `toml` crate's pretty printer | `toml` |
+| `confy/basic-toml` | TOML, written like the Rust `basic-toml` crate (compact arrays) | `toml` |
+| `confy/yaml` | YAML, like `serde_yaml` | `yml` |
+| `confy/ron` | Rusty Object Notation, like `ron`'s pretty printer | `ron` |
 
-For using `RON` files with `confy` you have to make sure you have enabled the `ron_conf` feature and disabled both `toml_conf` and `yaml_conf`.
+## API
 
-Enable the feature in `Cargo.toml`:
+Each entry point exports the same functions. The JSDoc in `src/` has the details of each one.
 
-```toml
-[dependencies.confy]
-features = ["ron_conf"]
-default-features = false
-```
+- `load(appName, configName, schema)`: reads the configuration from `getConfigurationFilePath(appName, configName)`.
+  A missing file is created with the schema's default value.
+- `loadPath(path, schema)`: the same for any path.
+- `loadOrElse(path, schema, op)`: like `loadPath`, but when the file is missing, cannot be read or does not decode,
+  stores and returns `op()` instead.
+- `store(appName, configName, value, schema)` and `storePath(path, value, schema)`: write the value, creating the
+  missing parent directories. The value is serialized before the file is opened, so a value that does not match
+  the schema leaves the existing file untouched.
+- `storePerms(...)` and `storePathPerms(...)`: the same, with a file mode such as `0o600` as the last argument.
+- `getConfigurationFilePath(appName, configName)`: where `load` and `store` keep the file, for example to show
+  it to the user. `configName` defaults to `default-config`.
+- `changeConfigStrategy(ConfigStrategy.App | ConfigStrategy.Native)`: see below.
+- `ConfyError`, `ConfigStrategy`, `t` and `EXTENSION` (the format's file extension).
 
-## Changing Error Messages
+## Errors
 
-Information about adding context to error messages can be found at [Providing Context](https://rust-cli.github.io/book/tutorial/errors.html#providing-context)
+Every failure is a `ConfyError` with `kind` (the Rust variant name, for example `BadTomlData` or
+`DirectoryCreationFailed`), `message` (its text, for example `Bad TOML data`) and, except for
+`BadConfigDirectory`, `source`: the format's error, with line and column, or the file-system error. To add context
+for your users, wrap it: `throw new Error('could not read the settings', { cause: err })`.
 
 ## Config File Location
 
-`confy` uses the [etcetera](https://docs.rs/etcetera/latest/etcetera/) crate to store your configuration files, the common locations for those depend on the stratgey usd [`App Strategy`](https://docs.rs/etcetera/latest/etcetera/#appstrategy) or [`Native Strategy`](https://docs.rs/etcetera/latest/etcetera/#native-strategy), below are the common OS paths, you can change the strategy using the built-in [`change_config_strategy`](https://docs.rs/confy/2.0.0/confy/fn.change_config_strategy.html) function.
+The configuration file is `<config dir>/<app dir>/<configName or default-config>.<EXTENSION>`. The strategy is
+`ConfigStrategy.App` by default; change it with `changeConfigStrategy` before loading or storing.
 
-### App Strategy
-
-This is the default strategy in version `2.0.0`+. It uses the `XDG` format on both Linux and MacOS systems.
-
-| Linux | macOS | Windows |
+| | `App` strategy | `Native` strategy |
 | --- | --- | --- |
-| `$XDG_CONFIG_HOME`/`<project_path>` or `$HOME`/.config/`<project_path>` | `$HOME`/.config/`<project_path>` | `{FOLDERID_RoamingAppData}`/`<project_path>`/config |
+| Linux and other Unix systems | `$XDG_CONFIG_HOME/<app dir>` when `XDG_CONFIG_HOME` is an absolute path, otherwise `$HOME/.config/<app dir>` | same as `App` |
+| macOS | same as Linux | `$HOME/Library/Preferences/rs.<App-Name>` |
+| Windows | `%APPDATA%\<app name>\config` | same as `App` |
 
-Where the `<project_path>` will be `$MY_APP_NAME`.
+`<app dir>` is the app name in lower case with spaces turned into hyphens; `<App-Name>` keeps the case and turns
+spaces into hyphens. The home directory is `$HOME` when it is set and not empty, otherwise the current user's
+home from the system's user database. When there is none, `getConfigurationFilePath`, `load`, `store` and
+`storePerms` fail with `BadConfigDirectory`.
 
-### Native Strategy
+## Development
 
-You can change to this strategy which is provided for both backwards capability and for GUI applications on macOS which is more traditional and expects this format.
+`npm test` runs the test suite (the original crate's tests and its documentation examples), `npm run lint`
+rejects syntax errors, unused variables, functions, classes and imports, and undefined names in every source
+file, and `npm audit` checks the (empty) dependency tree.
 
-| Linux | macOS | Windows |
-| --- | --- | --- |
-| `$XDG_CONFIG_HOME`/`<project_path>` or `$HOME`/.config/`<project_path>` | `$HOME`/Library/Application Support/`<project_path>` | `{FOLDERID_RoamingAppData}`/`<project_path>`/config |
+## Changelog
 
-Where the `<project_path>` will be `rs.$MY_APP_NAME` on macOS and just `$MY_APP_NAME` elsewhere.
+### 2.0.0 (JavaScript)
 
-## Breaking changes
+* The package is a JavaScript port of the Rust crate `confy` 2.0.0 for Node.js 22: one entry point per format
+  (`confy`, `confy/basic-toml`, `confy/yaml`, `confy/ron`) instead of feature flags, schemas built with `t`
+  instead of serde types, and the same files, paths and error variants. It has no npm dependencies.
 
-### Version 2.0.0
+### History of the Rust crate
 
-In version `2.0.0` we moved from the [`ProjectDirs`](https://github.com/dirs-dev/directories-rs?tab=readme-ov-file#projectdirs) crate to [`etcetera`](https://docs.rs/etcetera/latest/etcetera/) allowing for both uses of `XDG` or the OS's Native paths.
+These are the breaking changes of the Rust crate before the port.
 
-* From now on the default will be using `XDG` directories on macOS.
+#### Version 2.0.0
 
-### Version 0.6.0
+In version `2.0.0` the crate moved from the [`ProjectDirs`](https://github.com/dirs-dev/directories-rs?tab=readme-ov-file#projectdirs) crate to [`etcetera`](https://docs.rs/etcetera/latest/etcetera/) allowing for both uses of `XDG` or the OS's Native paths.
 
-In this version we bumped several dependencies which have had changes with some of the default (de)serialization process:
+* From then on the default was using `XDG` directories on macOS.
+
+#### Version 0.6.0
+
+This version bumped several dependencies which had changes in some of the default (de)serialization process:
 
 * `serde_yaml` v0.8 -> v0.9: [v0.9 release notes](https://github.com/dtolnay/serde-yaml/releases/tag/0.9.0). There were several breaking changes to `v0.9.0` and are listed in this release tag. Especially cases where previously numbers were parsed and now return `String`. See the release notes for more details.
 * `toml` v0.5 -> v0.8: [v0.8 CHANGELOG](https://github.com/toml-rs/toml/blob/main/crates/toml/CHANGELOG.md#compatibility-1). Breaking change to how tuple variants work in `toml`, from the notes: "Serialization and deserialization of tuple variants has changed from being an array to being a table with the key being the variant name and the value being the array".
 
-### Version 0.5.0
+#### Version 0.5.0
 
-* The base functions `load` and `store` have been added an optional parameter in the event multiples configurations are needed, or ones with different filename.
-* The default configuration file is now named "default-config" instead of using the application's name. Put the second argument of `load` and `store` to be the same of the first one to keep the previous configuration file.
-* It is now possible to save the configuration as `toml` or as `YAML`. The configuration's file name's extension depends on the format used.
+* The base functions `load` and `store` gained an optional parameter in the event multiple configurations are needed, or ones with different filename.
+* The default configuration file was named "default-config" instead of using the application's name. Put the second argument of `load` and `store` to be the same of the first one to keep the previous configuration file.
+* It became possible to save the configuration as `toml` or as `YAML`. The configuration's file name's extension depends on the format used.
 
-### Version 0.4.0
+#### Version 0.4.0
 
-Starting with version 0.4.0 the configuration file are stored in the expected place for your system. See the [`directories`] crates for more information.
+Starting with version 0.4.0 the configuration file was stored in the expected place for your system. See the [`directories`] crates for more information.
 Before version 0.4.0, the configuration file was written in the current directory.
 
 [`directories`]: https://crates.io/crates/directories
