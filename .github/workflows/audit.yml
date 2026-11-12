@@ -14,28 +14,12 @@ jobs:
     steps:
       - name: Checkout sources
         uses: actions/checkout@v4
-      
-      - name: Install toolchain
-        uses: dtolnay/rust-toolchain@master
-        with:
-          toolchain: stable
 
-      - name: Setup Cache
-        uses: actions/cache@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
         with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-            ~/.cargo/.crates.toml
-            ~/.cargo/.crates2.json
-            target/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-audit
-
-      - name: Install Cargo Audit
-        run: cargo install cargo-audit --locked
-        shell: bash
+          node-version: 22
 
       - name: Run Audit
-        run: cargo audit
+        run: npm audit --audit-level=low
+        shell: bash
